@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello future topper - Chemistry Quiz</title>
+    
+    <!-- Firebase Libraries -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #eef2f3;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        .header {
+            background: linear-gradient(to right, #1a2a6c, #b21f1f, #fdbb2d);
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+            text-transform: uppercase;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .header h1 { margin: 0; font-size: 24px; letter-spacing: 1px; }
+        .header p { margin: 5px 0 0 0; font-size: 14px; font-weight: bold; }
+        
+        .container {
+            max-width: 750px;
+            margin: 30px auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .hidden { display: none; }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 15px 0;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover { background-color: #219150; }
+        button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        
+        #timer-bar {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 12px;
+            border-radius: 5px;
+            text-align: right;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 20px;
+            border: 1px solid #ffeeba;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .question-block {
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px dashed #eee;
+        }
+        .question-title { font-weight: bold; font-size: 16px; margin-bottom: 12px; color: #2c3e50; }
+        .option-label {
+            display: block;
+            background: #f8f9fa;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+        }
+        .option-label:hover { background: #e9ecef; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td { border: 1px solid #ddd; }
+        th, td { padding: 12px; text-align: center; font-size: 15px; }
+        th { background-color: #1a2a6c; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .highlight-row { background-color: #d4edda !important; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Hello future topper</h1>
+    <p>Chemistry Quiz (Class 12 - Ch 2 & 3) | Time: 30 Mins</p>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div class="container" id="login-screen">
+    <h2 style="text-align: center; color: #2c3e50;">Welcome to Online Test</h2>
+    <p style="text-align: center; color: #555;">कृपया अपना नाम दर्ज करें। एक बार टेस्ट सबमिट होने के बाद आप केवल अपना रैंक देख पाएंगे।</p>
+    <input type="text" id="studentName" placeholder="Enter Your Full Name..." required autocomplete="off">
+    <button id="startBtn" onclick="startQuiz()">Start Quiz</button>
+    <p id="loading-text" style="text-align:center; color:#e74c3c; display:none;">Checking database...</p>
+</div>
+
+<!-- QUIZ SCREEN -->
+<div class="container hidden" id="quiz-screen">
+    <!-- TIMER SET TO 30:00 -->
+    <div id="timer-bar">⏱ Time Left: <span id="time">30:00</span></div>
+    <div id="questions-container"></div>
+    <button onclick="submitQuiz()" style="background-color: #e74c3c; margin-top: 10px;">Submit Test</button>
+</div>
+
+<!-- LEADERBOARD SCREEN -->
+<div class="container hidden" id="result-screen">
+    <h2 id="result-message" style="text-align: center; color: #27ae60;"></h2>
+    <h3 style="text-align: center; border-bottom: 2px solid #ddd; padding-bottom: 10px;">🏆 All Students Leaderboard 🏆</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Student Name</th>
+                <th>Marks</th>
+            </tr>
+        </thead>
+        <tbody id="leaderboard-body">
+            <tr><td colspan="3">Loading rankings...</td></tr>
+        </tbody>
+    </table>
+    <p style="text-align:center; margin-top:25px; color:#e74c3c; font-weight:bold; font-size: 16px;">Written by Saurya Raj Ranjan</p>
+    <button onclick="location.reload()" style="margin-top: 15px; background-color: #34495e;">Go to Home</button>
+</div>
+
+<script>
+    // ==========================================
+    // YAHAN FIREBASE CONFIG KEY PASTE KAREIN
+    // ==========================================
+    const firebaseConfig = {
+      // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCNrj_kjgL968A9bnCxchVkstqraLlJXB8",
+  authDomain: "chemistry-quiz-549f8.firebaseapp.com",
+  databaseURL: "https://chemistry-quiz-549f8-default-rtdb.firebaseio.com",
+  projectId: "chemistry-quiz-549f8",
+  storageBucket: "chemistry-quiz-549f8.firebasestorage.app",
+  messagingSenderId: "80126416681",
+  appId: "1:80126416681:web:03982f45ca35a97c758938"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);    };
+
+    // Firebase Initialize karein
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+    // ==========================================
+
+    // 35 Questions Array
+    const questions = [
+        { q: "1. 234.2 ग्राम चीनी के घोल में 34.2 ग्राम चीनी है। घोल का मोलल सान्द्रण क्या है? [BSEB 2021]", options: ["0.1", "0.5", "5.5", "55.5"], ans: "0.5" },
+        { q: "2. निम्न में से कौन अणुसंख्य गुणधर्म (Colligative property) नहीं है? [BSEB 2020]", options: ["हिमांक का अवनमन", "क्वथनांक का उन्नयन", "प्रकाशीय क्रियाशीलता", "वाष्पदाब का आपेक्षिक अवनमन"], ans: "प्रकाशीय क्रियाशीलता" },
+        { q: "3. फैराडे का विद्युत विच्छेदन का द्वितीय नियम संबंधित है: [BSEB 2017, 2022]", options: ["धनायन के परमाणु संख्या से", "विद्युत अपघट्य के समतुल्य भार से", "ऋणायन के परमाणु संख्या से", "धनायन के वेग से"], ans: "विद्युत अपघट्य के समतुल्य भार से" },
+        { q: "4. एक फैराडे विद्युत कितने कूलॉम के बराबर होता है? [BSEB 2020]", options: ["96500", "9650", "96000", "10000"], ans: "96500" },
+        { q: "5. पहाड़ों पर जल का क्वथनांक कम हो जाता है, क्योंकि: [BSEB 2021]", options: ["वहाँ वायुमंडलीय दाब कम है", "वहाँ ताप कम है", "वहाँ दाब अधिक है", "वहाँ हवा ज्यादा है"], ans: "वहाँ वायुमंडलीय दाब कम है" },
+        { q: "6. गैल्वेनिक सेल (Galvanic cell) में एनोड (Anode) होता है: [BSEB 2020]", options: ["ऋणात्मक इलेक्ट्रोड", "धनात्मक इलेक्ट्रोड", "उदासीन इलेक्ट्रोड", "इनमें से कोई नहीं"], ans: "ऋणात्मक इलेक्ट्रोड" },
+        { q: "7. शुद्ध जल की मोलरता (Molarity) कितनी होती है? [BSEB 2019]", options: ["18", "50", "55.5", "5.55"], ans: "55.5" },
+        { q: "8. लेड स्टोरेज बैटरी को चार्ज करते समय क्या होता है? [BSEB 2020]", options: ["PbO2 घुलता है", "H2SO4 पुनः उत्पन्न होता है", "PbSO4 एनोड पर बनता है", "लेड इलेक्ट्रोड पर Pb जमा होता है"], ans: "H2SO4 पुनः उत्पन्न होता है" },
+        { q: "9. राउल्ट के नियम के अनुसार, वाष्पदाब का आपेक्षिक अवनमन किसके बराबर होता है? [BSEB 2018]", options: ["विलायक के मोल प्रभाज", "विलेय के मोल प्रभाज", "घोल की मोलरता", "घोल की नॉर्मलता"], ans: "विलेय के मोल प्रभाज" },
+        { q: "10. लवण सेतु (Salt bridge) में KCl का उपयोग होता है क्योंकि: [BSEB 2019]", options: ["यह एक अच्छा इलेक्ट्रोलाइट है", "K+ और Cl- आयनों की गति लगभग समान होती है", "यह अगर-अगर के साथ जेल बनाता है", "यह सेल प्रतिक्रिया में भाग लेता है"], ans: "K+ और Cl- आयनों की गति लगभग समान होती है" },
+        { q: "11. परासरण दाब निम्नलिखित में से किस समीकरण द्वारा व्यक्त होते हैं? [BSEB 2020]", options: ["P = CRT", "P = CT/R", "P = RC/T", "P = RT/C"], ans: "P = CRT" },
+        { q: "12. अर्धपारगम्य झिल्ली से परासरण क्रिया में निकल पाते हैं: [BSEB 2021]", options: ["विलेय के अणु", "विलायक के अणु", "जटिल आयन", "सरल आयन"], ans: "विलायक के अणु" },
+        { q: "13. आदर्श विलयन का निम्न में से कौन गुण है? [BSEB 2020]", options: ["यह राउल्ट के नियम का पालन करता है", "यह राउल्ट के नियम का पालन नहीं करता है", "A और B दोनों", "इनमें से कोई नहीं"], ans: "यह राउल्ट के नियम का पालन करता है" },
+        { q: "14. आइसोटोनिक (समपरासरी) विलयन वे हैं जिनके बराबर होते हैं: [BSEB 2021]", options: ["परासरण दाब", "पृष्ठ तनाव", "श्यानता", "वाष्पदाब"], ans: "परासरण दाब" },
+        { q: "15. द्रवित NaCl के वैद्युत अपघटन से कैथोड पर मुक्त होता है: [BSEB 2019]", options: ["क्लोरीन", "सोडियम", "सोडियम अमलगम", "हाइड्रोजन"], ans: "सोडियम" },
+        { q: "16. सेल स्थिरांक (Cell constant) की इकाई है: [BSEB 2021]", options: ["ohm⁻¹", "ohm⁻¹ cm⁻¹", "cm⁻¹", "ohm cm"], ans: "cm⁻¹" },
+        { q: "17. विशिष्ट चालकता की इकाई होती है: [BSEB 2020]", options: ["ohm cm", "ohm⁻¹ cm⁻¹", "ohm⁻¹ cm", "ohm cm⁻¹"], ans: "ohm⁻¹ cm⁻¹" },
+        { q: "18. मोलर चालकता (Molar conductivity) की इकाई है: [BSEB 2022]", options: ["ohm⁻¹ cm² mol⁻¹", "ohm cm² mol⁻¹", "ohm⁻¹ cm⁻¹ mol⁻¹", "ohm cm mol⁻¹"], ans: "ohm⁻¹ cm² mol⁻¹" },
+        { q: "19. 1 फैराडे विद्युत धारा प्रवाहित करने पर प्राप्त मात्रा बराबर होगी: [BSEB 2019]", options: ["1 ग्राम समतुल्यांक", "1 ग्राम मोल", "विद्युत रासायनिक तुल्यांक", "आधा ग्राम समतुल्यांक"], ans: "1 ग्राम समतुल्यांक" },
+        { q: "20. विलयन में विलेय की मोललता (Molality) किस यूनिट में व्यक्त की जाती है? [BSEB 2020]", options: ["मोल/लीटर", "मोल/किलोग्राम", "ग्राम/लीटर", "इनमें से कोई नहीं"], ans: "मोल/किलोग्राम" },
+        { q: "21. कौन-सा सांद्रण इकाई ताप से स्वतंत्र है? [BSEB 2021]", options: ["मोलरता", "नॉर्मलता", "मोललता", "आयतन प्रतिशत"], ans: "मोललता" },
+        { q: "22. विद्युत अपघटन के नियम दिए थे: [BSEB 2020]", options: ["लैमार्क ने", "ओस्टवाल्ड ने", "फैराडे ने", "अर्हेनियस ने"], ans: "फैराडे ने" },
+        { q: "23. डेनियल सेल में होने वाली सेल अभिक्रिया है: [BSEB 2020]", options: ["Zn + Cu²⁺ → Zn²⁺ + Cu", "Cu + Zn²⁺ → Cu²⁺ + Zn", "Zn + Ag⁺ → Zn²⁺ + Ag", "Cu + Ag⁺ → Cu²⁺ + Ag"], ans: "Zn + Cu²⁺ → Zn²⁺ + Cu" },
+        { q: "24. जलीय विलयन में किस क्षारीय धातु का सबसे अधिक अवकारक गुण होता है? [BSEB 2019]", options: ["Na", "K", "Rb", "Li"], ans: "Li" },
+        { q: "25. किसी घोल का परासरण दाब (π) और सान्द्रण (C) में संबंध है: [BSEB 2021]", options: ["π = C/RT", "π/C = RT", "π = RT/C", "π = C + RT"], ans: "π/C = RT" },
+        { q: "26. 96500 कूलॉम विद्युत CuSO4 के विलयन से मुक्त करता है: [BSEB 2019]", options: ["63.5 ग्राम ताँबा", "31.76 ग्राम ताँबा", "96500 ग्राम ताँबा", "100 ग्राम ताँबा"], ans: "31.76 ग्राम ताँबा" },
+        { q: "27. किसी सेल की अभिक्रिया की साम्यावस्था पर सेल का विद्युत वाहक बल (EMF) होता है: [BSEB 2021]", options: ["धनात्मक", "ऋणात्मक", "शून्य", "अनंत"], ans: "शून्य" },
+        { q: "28. Zn(s) | Zn²⁺(aq) || Cu²⁺(aq) | Cu(s) है एक: [BSEB 2022]", options: ["वेस्टन सेल", "डेनियल सेल", "केलोमेल सेल", "मानक सेल"], ans: "डेनियल सेल" },
+        { q: "29. कौन-सा अणुसंख्य गुणधर्म प्रोटीन और बहुलकों का मोलर द्रव्यमान ज्ञात करने के लिए सर्वोत्तम है? [BSEB 2021]", options: ["परासरण दाब", "वाष्पदाब का अवनमन", "क्वथनांक का उन्नयन", "हिमांक का अवनमन"], ans: "परासरण दाब" },
+        { q: "30. विलयन के अणुसंख्य गुणधर्म वे गुण हैं जो निर्भर करते हैं: [BSEB 2020]", options: ["कणों के आकार पर", "कणों की प्रकृति पर", "कणों की संख्या पर", "विलायक की प्रकृति पर"], ans: "कणों की संख्या पर" },
+        { q: "31. 0.1 M Ba(NO3)2 विलयन के लिए वांट हॉफ गुणांक (i) 2.74 है। विघटन की मात्रा है: [BSEB 2018]", options: ["91.3%", "87%", "100%", "74%"], ans: "87%" },
+        { q: "32. निम्नलिखित में कौन द्वितीयक सेल (Secondary cell) है? [BSEB 2021]", options: ["लेक्लांशे सेल", "लेड स्टोरेज बैटरी", "सांद्रण सेल", "इनमें से सभी"], ans: "लेड स्टोरेज बैटरी" },
+        { q: "33. किसी चालकत्व सेल का सेल स्थिरांक (Cell constant) होता है: [BSEB 2022]", options: ["l/a", "a/l", "l×a", "l+a"], ans: "l/a" },
+        { q: "34. विलेय के मोल प्रभाज को व्यक्त किया जाता है: [BSEB 2021]", options: ["n / (n+N)", "N / (n+N)", "n / N", "N / n"], ans: "n / (n+N)" },
+        { q: "35. निम्नलिखित में से कौन-सा इलेक्ट्रोड विभव मापन के लिए संदर्भ इलेक्ट्रोड के रूप में प्रयुक्त होता है? [BSEB 2019]", options: ["जिंक इलेक्ट्रोड", "कॉपर इलेक्ट्रोड", "मानक हाइड्रोजन इलेक्ट्रोड (SHE)", "सिल्वर इलेक्ट्रोड"], ans: "मानक हाइड्रोजन इलेक्ट्रोड (SHE)" }
+    ];
+
+    let currentStudent = "";
+    
+    // TIMER SET TO 30 MINUTES (30 * 60 seconds)
+    let timeTotal = 30 * 60; 
+    let timerInterval;
+
+    function startQuiz() {
+        let nameInput = document.getElementById('studentName').value.trim();
+        if(nameInput === "") {
+            alert("कृपया टेस्ट शुरू करने के लिए अपना नाम दर्ज करें!");
+            return;
+        }
+
+        // Firebase me key banate waqt special characters allow nahi hote
+        let dbKey = nameInput.replace(/[.#$\[\]]/g, '').toLowerCase();
+
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('loading-text').style.display = "block";
+
+        // Check if student already in database
+        db.ref('students/' + dbKey).once('value').then((snapshot) => {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('loading-text').style.display = "none";
+
+            if(snapshot.exists()) {
+                alert(`Hello ${nameInput}, आप यह टेस्ट पहले ही दे चुके हैं। आपका डेटा लोड हो रहा है!`);
+                currentStudent = nameInput;
+                showLeaderboard();
+            } else {
+                currentStudent = nameInput;
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('quiz-screen').classList.remove('hidden');
+                renderQuestions();
+                startTimer();
+            }
+        }).catch(error => {
+            alert("Database connection error: " + error.message);
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('loading-text').style.display = "none";
+        });
+    }
+
+    function renderQuestions() {
+        const container = document.getElementById('questions-container');
+        container.innerHTML = "";
+        questions.forEach((item, index) => {
+            let qHTML = `<div class="question-block">
+                <div class="question-title">${item.q}</div>`;
+            item.options.forEach(opt => {
+                qHTML += `<label class="option-label">
+                            <input type="radio" name="q${index}" value="${opt}"> ${opt}
+                          </label>`;
+            });
+            qHTML += `</div>`;
+            container.innerHTML += qHTML;
+        });
+    }
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            timeTotal--;
+            let min = Math.floor(timeTotal / 60);
+            let sec = timeTotal % 60;
+            document.getElementById('time').innerText = `${min < 10 ? '0'+min : min}:${sec < 10 ? '0'+sec : sec}`;
+            
+            if(timeTotal <= 0) {
+                clearInterval(timerInterval);
+                alert("Time Out! आपका टेस्ट ऑटोमैटिकली सबमिट हो रहा है।");
+                submitQuiz();
+            }
+        }, 1000);
+    }
+
+    function submitQuiz() {
+        clearInterval(timerInterval);
+        let score = 0;
+        
+        questions.forEach((item, index) => {
+            let selected = document.querySelector(`input[name="q${index}"]:checked`);
+            if(selected && selected.value === item.ans) {
+                score++;
+            }
+        });
+
+        let dbKey = currentStudent.replace(/[.#$\[\]]/g, '').toLowerCase();
+        
+        // Save to Firebase
+        db.ref('students/' + dbKey).set({
+            name: currentStudent,
+            score: score,
+            time: Date.now()
+        }).then(() => {
+            showLeaderboard(score);
+        }).catch(error => {
+            alert("स्कोर सेव करने में एरर आई: " + error.message);
+        });
+    }
+
+    function showLeaderboard(justScored = null) {
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('quiz-screen').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+
+        let tbody = document.getElementById('leaderboard-body');
+        
+        // Fetch all students from Firebase
+        db.ref('students').once('value').then((snapshot) => {
+            if(!snapshot.exists()) {
+                tbody.innerHTML = "<tr><td colspan='3'>कोई डेटा नहीं मिला।</td></tr>";
+                return;
+            }
+
+            let allStudents = [];
+            snapshot.forEach((child) => {
+                allStudents.push(child.val());
+            });
+
+            // Sort logic: Highest score first.
+            allStudents.sort((a, b) => {
+                if (b.score === a.score) return a.time - b.time; 
+                return b.score - a.score;
+            });
+
+            tbody.innerHTML = "";
+            let studentRank = 0;
+            let studentMarks = 0;
+
+            allStudents.forEach((user, index) => {
+                let rank = index + 1;
+                let isCurrent = (user.name.toLowerCase() === currentStudent.toLowerCase());
+                
+                if(isCurrent) {
+                    studentRank = rank;
+                    studentMarks = user.score;
+                }
+                
+                let rowClass = isCurrent ? "highlight-row" : "";
+                let row = `<tr class="${rowClass}">
+                    <td>#${rank}</td>
+                    <td>${user.name}</td>
+                    <td>${user.score} / ${questions.length}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+
+            if(justScored !== null) {
+                document.getElementById('result-message').innerText = `Test Submitted Successfully!\nAapka Score: ${studentMarks} | Rank: #${studentRank}`;
+            } else {
+                document.getElementById('result-message').innerText = `Aapka Score: ${studentMarks} | Rank: #${studentRank}`;
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
